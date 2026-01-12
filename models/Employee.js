@@ -5,6 +5,8 @@ const {
   encryptSensitiveData,
   decryptSensitiveData,
   getDecryptedDocumentAsBase64,
+  encryptFileBuffer,
+  decryptFileBuffer,
 } = require("../utils/cryptography");
 
 module.exports = (sequelize, DataTypes) => {
@@ -52,6 +54,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "employeeId",
         as: "salaryStructure",
       });
+      Employee.hasMany(models.EmployeePaymentSlip, {
+        foreignKey: "empId",
+        as: "paymentSlips",
+      });
     }
   }
 
@@ -63,27 +69,27 @@ module.exports = (sequelize, DataTypes) => {
       },
       departmentId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       roleId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       levelId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       salarySlabId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       designationId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       workLocationId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       gender: {
         type: DataTypes.ENUM("male", "female", "other"),
@@ -148,7 +154,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
       lastCtc: {
-        type: DataTypes.STRING,
+        type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
       },
       relivingLetter: {
@@ -193,30 +199,43 @@ module.exports = (sequelize, DataTypes) => {
       // Employment Details
       joiningDate: {
         type: DataTypes.DATE,
-        allowNull: false,
+        allowNull: true,
       },
       employeeType: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
 
       // Payroll
       assignSalaryStructure: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       payrollEligibility: {
         type: DataTypes.BOOLEAN,
-        allowNull: false,
+        allowNull: true,
       },
       ctc: {
-        type: DataTypes.STRING,
-        allowNull: false,
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
       },
       paymentMethod: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
+
+      //new added by JB
+      onboardingStatus: {
+        type: DataTypes.ENUM(
+          'employee_pending',
+          'employee_completed',
+          'hr_pending',
+          'completed'
+        ),
+        allowNull: false,
+        defaultValue: 'employee_pending',
+      }
+
     },
     {
       sequelize,
@@ -225,52 +244,134 @@ module.exports = (sequelize, DataTypes) => {
     }
   );
 
-  const ENCRYPT_FIELDS = [
-    "uanNumber",
-    "aadharNumber",
-    "panNumber",
-    "accountNumber",
-    "ifscCode",
-    "aadharDoc",
-    "panDoc",
-    "passbookDoc",
-  ];
+  // const ENCRYPT_FIELDS = [
+  //   "uanNumber",
+  //   "aadharNumber",
+  //   "panNumber",
+  //   "accountNumber",
+  //   "ifscCode",
+  //   "aadharDoc",
+  //   "panDoc",
+  //   "passbookDoc",
+  // ];
 
   // Encrypt hook
   Employee.addHook("beforeCreate", (employee) => encryptFields(employee));
   Employee.addHook("beforeUpdate", (employee) => encryptFields(employee));
 
   function encryptFields(instance) {
-    ENCRYPT_FIELDS.forEach((field) => {
-      if (instance[field]) {
-        instance[field] = encryptSensitiveData(instance[field]);
-      }
-    });
-  }
-
-  Employee.prototype.toJSON = function () {
-    const values = Object.assign({}, this.get());
-
-    ENCRYPT_FIELDS.forEach((field) => {
-      if (
-        values[field] &&
-        [
-          "uanNumber",
-          "aadharNumber",
-          "panNumber",
-          "accountNumber",
-          "ifscCode",
-        ].includes(field)
-      ) {
-        values[field] = decryptSensitiveData(values[field]);
+  ENCRYPT_FIELDS.forEach((field) => {
+    if (instance.changed(field) && instance[field]) {
+      if (["uanNumber","aadharNumber","panNumber","accountNumber","ifscCode"].includes(field)) {
+        if (!instance[field].includes(":")) { // prevent double encryption
+          instance[field] = encryptSensitiveData(instance[field]);
+        }
       } else {
-        values[field] = getDecryptedDocumentAsBase64(values[field]);
+        // BLOBs
+        if (!Buffer.isBuffer(instance[field]) || instance[field].length > 16)
+        { 
+          instance[field] = require("../utils/cryptography").encryptFileBuffer(instance[field]);
+        }
       }
-    });
+    }
+  });
+}
 
-    delete values.password;
-    return values;
-  };
+
+  // Employee.prototype.toJSON = function () {
+  //   const values = Object.assign({}, this.get());
+
+  //   ENCRYPT_FIELDS.forEach((field) => {
+  //     if (
+  //       values[field] &&
+  //       [
+  //         "uanNumber",
+  //         "aadharNumber",
+  //         "panNumber",
+  //         "accountNumber",
+  //         "ifscCode",
+  //       ].includes(field)
+  //     ) {
+  //       values[field] = decryptSensitiveData(values[field]);
+  //     } else {
+  //       values[field] = getDecryptedDocumentAsBase64(values[field]);
+  //     }
+  //   });
+
+  //   delete values.password;
+  //   return values;
+  // };
+
+//   Employee.prototype.toJSON = function () {
+//   const values = Object.assign({}, this.get());
+
+//   ENCRYPT_FIELDS.forEach((field) => {
+//     if (["uanNumber", "aadharNumber", "panNumber", "accountNumber", "ifscCode"].includes(field)) {
+//       values[field] = decryptSensitiveData(values[field]); // strings
+//     } else if (["aadharDoc", "panDoc", "passbookDoc"].includes(field)) {
+//       values[field] = decryptFileBuffer(values[field]); // BLOBs
+//     }
+//   });
+
+//   delete values.password;
+//   return values;
+// };
+
+
+// Employee.prototype.toJSON = function () {
+//   const values = Object.assign({}, this.get());
+
+//   ENCRYPT_FIELDS.forEach((field) => {
+//     if (["uanNumber", "aadharNumber", "panNumber", "accountNumber", "ifscCode"].includes(field)) {
+//       values[field] = decryptSensitiveData(values[field]); // strings
+//     } else if (["aadharDoc", "panDoc", "passbookDoc"].includes(field)) {
+//       values[field] = decryptFileBuffer(values[field]); // BLOBs
+//     }
+//   });
+
+//   delete values.password;
+//   return values;
+// };
+
+
+const ENCRYPT_FIELDS = [
+  "uanNumber",
+  "aadharNumber",
+  "panNumber",
+  "accountNumber",
+  "ifscCode",
+  "aadharDoc",
+  "panDoc",
+  "passbookDoc",
+  "relivingLetter",
+];
+
+Employee.prototype.toJSON = function () {
+  const values = Object.assign({}, this.get());
+
+  ENCRYPT_FIELDS.forEach((field) => {
+    if (["uanNumber","aadharNumber","panNumber","accountNumber","ifscCode"].includes(field)) {
+      if (values[field]) {
+        try {
+          values[field] = decryptSensitiveData(values[field]);
+        } catch {
+          values[field] = null; // Prevent crash if data is invalid
+        }
+      }
+    } else if (["aadharDoc","panDoc","passbookDoc","relivingLetter","profilePicture"].includes(field)) {
+      if (values[field]) {
+        try {
+          values[field] = decryptFileBuffer(values[field]);
+        } catch {
+          values[field] = null;
+        }
+      }
+    }
+  });
+
+  delete values.password;
+  return values;
+};
 
   return Employee;
 };

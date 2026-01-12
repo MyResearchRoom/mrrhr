@@ -35,11 +35,14 @@ exports.getHolidaySettingList = async (req, res) => {
     try {
 
         const holidaySetting = await HolidaySetting.findAll()
-
+        const formattedHolidays = holidaySetting.map(h => ({
+            ...h.toJSON(),
+            date: new Date(h.date).toLocaleDateString('en-IN'), 
+        }));
         res.status(200).json({
             success: true,
             message: 'Holiday setting list retrieved successfully',
-            data: holidaySetting
+            data: formattedHolidays
         })
 
     } catch (error) {

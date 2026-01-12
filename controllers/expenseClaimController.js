@@ -425,7 +425,6 @@ exports.getExpenseClaimCount = async (req, res) => {
   }
 };
 
-
 exports.getExpenseClaimOfEmployee = async (req, res) => {
   try {
     const { status, category, date, page = 1 } = req.query;
@@ -510,8 +509,6 @@ exports.getExpenseClaimOfEmployee = async (req, res) => {
   }
 };
 
-
-
 exports.getExpenseClaimCountOfEmployee = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -564,6 +561,66 @@ exports.getExpenseClaimCountOfEmployee = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to get expense claim count for employee.",
+    });
+  }
+};
+
+exports.getCategoryOfExpense = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+
+    // 1️⃣ Get employee
+    const employee = await Employee.findOne({
+      where: { userId },
+      attributes: ["id", "roleId"],
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    // 2️⃣ Get ALL expense limits for roleId
+    const expenseLimits = await ExpenseLimit.findAll({
+      where: { roleId: employee.roleId },
+      attributes: ["expenseStructure"],
+    });
+
+    if (!expenseLimits.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No expense structure found for this role",
+      });
+    }
+
+    // 3️⃣ Extract categories
+    const categories = expenseLimits
+      .flatMap(row => row.expenseStructure || [])
+      .map(item => item.category)
+      .filter(Boolean);
+
+    // 4️⃣ Remove duplicates
+    const uniqueCategories = [...new Set(categories)];
+
+    return res.status(200).json({
+      success: true,
+      data: uniqueCategories,
+    });
+
+  } catch (err) {
+    console.error("Error fetching expense categories:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get expense claim category",
     });
   }
 };

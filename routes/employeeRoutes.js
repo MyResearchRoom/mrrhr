@@ -12,6 +12,9 @@ const {
   getStats,
   updateEmployee,
   getUserInfo,
+  employeeCredentialRegistration,
+  empRegistrationByEmp,
+  updateEmpByHR,
 } = require("../controllers/employeeController");
 const { hrmValidationRules } = require("../validations/hrmValidations");
 const {
@@ -37,6 +40,15 @@ router.post(
   hrmValidationRules,
   validate,
   hrManagerRegistration
+);
+
+router.post(
+  "/employee-registration",
+  upload.fields([{ name: "profilePicture", maxCount: 1 }]),
+  validateFiles,
+  hrmValidationRules,
+  validate,
+  employeeCredentialRegistration
 );
 
 router.post(
@@ -124,5 +136,24 @@ router.get(
   authenticate(["HR_MANAGER", "HR_EMPLOYEE", "EMPLOYEE"]),
   getUserInfo
 );
+
+
+//new by JB 01-03-2026
+
+router.post(
+  "/emp-add",
+  upload.any(),
+  separateFilesByField,
+  validateFiles,
+  authenticate(["EMPLOYEE","HR_EMPLOYEE"]),
+  empRegistrationByEmp
+);
+
+router.patch(
+  "/emp-info-addByHR",
+  authenticate(["HR_MANAGER", "HR_EMPLOYEE"]),
+  updateEmpByHR
+);
+
 
 module.exports = router;
