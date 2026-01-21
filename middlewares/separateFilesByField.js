@@ -2,7 +2,7 @@ module.exports = function separateFilesByField(req, res, next) {
   const fileMap = {
     aadharDoc: [],
     panDoc: [],
-    profilePicture: [],
+    // profilePicture: [],
     passbookDoc: [],
     relivingLetter: [],
     experience: [],
@@ -24,7 +24,7 @@ module.exports = function separateFilesByField(req, res, next) {
       [
         "aadharDoc",
         "panDoc",
-        "profilePicture",
+        // "profilePicture",
         "passbookDoc",
         "relivingLetter",
       ].includes(fieldname)

@@ -12,9 +12,16 @@ const {
   getExpenseClaimCount,
   getExpenseClaimOfEmployee,
   getExpenseClaimCountOfEmployee,
+  getCategoryOfExpense,
 } = require("../controllers/expenseClaimController");
 const authenticate = require("../middlewares/authMiddleware");
 const router = express.Router();
+
+router.get(
+  "/getCategoryOfExpense",
+   authenticate(["EMPLOYEE","HR_EMPLOYEE", "HR_MANAGER"]),
+   getCategoryOfExpense
+)
 
 router.post(
   "/",

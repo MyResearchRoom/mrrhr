@@ -22,6 +22,8 @@ exports.getMonthlyPayrollData = async (req, res) => {
       .status(200)
       .json({ success: true, message: "Monthly Payroll Data", data });
   } catch (error) {
+    console.log(error);
+    
     res.status(500).json({ message: error.message, success: false });
   }
 };
@@ -56,6 +58,8 @@ exports.getCurrentMonthPayrollData = async (req, res) => {
       .status(200)
       .json({ success: true, message: "Monthly Payroll Data", data });
   } catch (error) {
+    console.log(error);
+    
     res.status(500).json({ message: error.message, success: false });
   }
 };
@@ -85,13 +89,14 @@ exports.pays = async (req, res) => {
       throw new Error("Future months are not allowed");
     }
 
-    if (inputMonth.isSame(currentMonth, "month") && !isLastDayOfCurrentMonth) {
-      throw new Error(
-        "Payroll for the current month is allowed only on the last day"
-      );
-    }
+    // if (inputMonth.isSame(currentMonth, "month") && !isLastDayOfCurrentMonth) {
+    //   throw new Error(
+    //     "Payroll for the current month is allowed only on the last day"
+    //   );
+    // }
 
     const result = await pays({ employeeIds, month });
+    console.log("Pay data in controller",result);
 
     res.status(200).json({
       success: true,
@@ -99,6 +104,8 @@ exports.pays = async (req, res) => {
       data: result,
     });
   } catch (error) {
+    console.log(error);
+    
     res.status(500).json({ message: error.message, success: false });
   }
 };
@@ -149,6 +156,8 @@ exports.getCurrentStats = async (req, res) => {
       data: stats,
     });
   } catch (error) {
+    console.log(error);
+    
     res.status(500).json({ message: error.message, success: false });
   }
 };

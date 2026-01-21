@@ -9,7 +9,12 @@ const router = express.Router();
 const authenticate = require("../middlewares/authMiddleware");
 const { isHRManager } = require("../middlewares/isHRManager");
 
-router.post("/", authenticate(["HR_MANAGER"]), isHRManager, grantPermission);
+router.post(
+  "/", 
+  authenticate(["HR_MANAGER"]), 
+  isHRManager, 
+  grantPermission
+);
 
 router.delete(
   "/:id",

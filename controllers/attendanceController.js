@@ -1,4 +1,3 @@
-//final
 const { Op, where } = require("sequelize");
 const moment = require("moment-timezone");
 const {
@@ -43,11 +42,18 @@ exports.checkIn = async (req, res) => {
     }
 
     const istInTime = moment().tz("Asia/Kolkata").toDate();
+    const officialCheckInMinutes = 9 * 60 + 15;
+    const nowIST = moment().tz("Asia/Kolkata");
+    const inTimeMinutes = nowIST.hours() * 60 + nowIST.minutes();
+
+    const status = inTimeMinutes <= officialCheckInMinutes ? "on-time" : "late";
+
 
     const attendance = await Attendance.create({
       employeeId,
       date: today,
       inTime: istInTime,
+      status,
     });
 
     res.status(200).json({
@@ -120,7 +126,7 @@ exports.checkOut = async (req, res) => {
     const outTime = moment().tz("Asia/Kolkata").format("HH:mm:ss");
     const checkOutMoment = moment(outTime, "HH:mm:ss");
     const totalHours = moment.duration(checkOutMoment.diff(inTime)).asHours();
-    const status = determineStatus(attendance.inTime, outTime, totalHours);
+    const status = determineStatus(attendance.inTime, outTime);
 
     attendance.outTime = outTime;
     // attendance.totalHours = totalHours.toFixed(2);
@@ -385,72 +391,143 @@ exports.getEmployeeAttendanceById = async (req, res) => {
   }
 };
 
+// exports.getEmployeeAttendanceOfWeek = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     if (!userId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "User ID is required.",
+//       });
+//     }
+
+//     const employee = await Employee.findOne({ where: { userId } });
+
+//     if (!employee) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Employee not found.",
+//       });
+//     }
+
+//     const employeeId = employee.id;
+
+//     const today = moment().tz("Asia/Kolkata");
+//     const startOfWeek = today
+//       .clone()
+//       .startOf("week")
+//       .add(1, "day")
+//       .format("YYYY-MM-DD");
+//     const endOfWeek = today
+//       .clone()
+//       .endOf("week")
+//       .add(1, "day")
+//       .format("YYYY-MM-DD");
+
+//     const attendance = (
+//       await Attendance.findAll({
+//         where: {
+//           employeeId,
+//           date: {
+//             [Op.between]: [startOfWeek, endOfWeek],
+//           },
+//         },
+//       })
+//     ).map((record) => {
+//         const dayName = moment(record.date).format("dddd");
+
+//         return {
+//           ...record.toJSON(),
+//           day: dayName,
+//           status:
+//             dayName === "Saturday" || dayName === "Sunday"
+//               ? "Weekend"
+//               : record.status,
+//         };
+//       });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Current Week Attendance List retrieved successfully.",
+//       weekRange: { from: startOfWeek, to: endOfWeek },
+//       data: attendance,
+//     });
+//   } catch (err) {
+//     console.error(err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to retrieve Current Week Attendance List.",
+//     });
+//   }
+// };
+
 exports.getEmployeeAttendanceOfWeek = async (req, res) => {
   try {
     const userId = req.user.id;
 
     if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "User ID is required.",
-      });
+      return res.status(400).json({ success: false, message: "User ID is required." });
     }
 
     const employee = await Employee.findOne({ where: { userId } });
-
     if (!employee) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found.",
-      });
+      return res.status(404).json({ success: false, message: "Employee not found." });
     }
 
     const employeeId = employee.id;
 
+    // Current date in IST
     const today = moment().tz("Asia/Kolkata");
-    const startOfWeek = today
-      .clone()
-      .startOf("week")
-      .add(1, "day")
-      .format("YYYY-MM-DD");
-    const endOfWeek = today
-      .clone()
-      .endOf("week")
-      .add(1, "day")
-      .format("YYYY-MM-DD");
 
-    const attendance = (
-      await Attendance.findAll({
-        where: {
-          employeeId,
-          date: {
-            [Op.between]: [startOfWeek, endOfWeek],
-          },
+    // Start of week (Monday) and end of week (Sunday)
+    const startOfWeek = today.clone().startOf("week").add(1, "day"); // Monday
+    const endOfWeek = today.clone().endOf("week").add(1, "day"); // Sunday
+
+    const attendanceRecords = await Attendance.findAll({
+      where: {
+        employeeId,
+        date: {
+          [Op.between]: [
+            startOfWeek.format("YYYY-MM-DD"),
+            endOfWeek.format("YYYY-MM-DD"),
+          ],
         },
-      })
-    )
-      // .map((record) => ({
-      //     ...record.toJSON(),
-      //     day: moment(record.date).format("dddd"),
-      // }));
+      },
+    });
 
-      .map((record) => {
-        const dayName = moment(record.date).format("dddd");
+    // const attendance = attendanceRecords.map((record) => {
+    //   // Convert record.date to IST
+    //   const recordDateIST = moment(record.date).tz("Asia/Kolkata");
+    //   const dayName = recordDateIST.format("dddd");
 
-        return {
-          ...record.toJSON(),
-          day: dayName,
-          status:
-            dayName === "Saturday" || dayName === "Sunday"
-              ? "Weekend"
-              : record.status,
-        };
-      });
+    //   return {
+    //     ...record.toJSON(),
+    //     date: recordDateIST.format("YYYY-MM-DD"), // formatted in IST
+    //     day: dayName,
+    //     status: dayName === "Saturday" || dayName === "Sunday" ? "Weekend" : record.status,
+    //   };
+    // });
+
+    const attendance = attendanceRecords.map((record) => {
+  // Convert date to IST
+  const recordDateIST = moment.utc(record.date).tz("Asia/Kolkata");
+  const dayName = recordDateIST.format("dddd");
+
+  return {
+    ...record.toJSON(),
+    date: recordDateIST.format("YYYY-MM-DD"), // corrected date
+    day: dayName,
+    status: dayName === "Saturday" || dayName === "Sunday" ? "Weekend" : record.status,
+    inTime: record.inTime,   // keep inTime as-is
+    outTime: record.outTime,
+  };
+});
 
     return res.status(200).json({
       success: true,
       message: "Current Week Attendance List retrieved successfully.",
-      weekRange: { from: startOfWeek, to: endOfWeek },
+      weekRange: { from: startOfWeek.format("YYYY-MM-DD"), to: endOfWeek.format("YYYY-MM-DD") },
       data: attendance,
     });
   } catch (err) {
@@ -461,6 +538,7 @@ exports.getEmployeeAttendanceOfWeek = async (req, res) => {
     });
   }
 };
+
 
 exports.getTodaysAttendanceCount = async (req, res) => {
   try {

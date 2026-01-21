@@ -27,7 +27,7 @@ router.get(
 
 router.get(
   "/getEmployeeAttendanceById/:id",
-  authenticate(["HR_EMPLOYEE", "HR_MANAGER"]),
+  authenticate(["HR_EMPLOYEE", "HR_MANAGER","EMPLOYEE"]),
   getEmployeeAttendanceById
 );
 

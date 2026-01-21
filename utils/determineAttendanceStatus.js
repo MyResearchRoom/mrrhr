@@ -6,12 +6,19 @@ function determineStatus(checkIn, checkOut) {
     const outTime = moment(checkOut, "HH:mm:ss");
 
     const hoursWorked = moment.duration(outTime.diff(inTime)).asHours();
-
     if (!checkIn || !checkOut) return "absent";
-    if (hoursWorked < 4.5) return "half-day";
     if (inTime.isAfter(officialCheckIn)) return "late";
-    if (hoursWorked > 9) return "over-time";
-
+    if (hoursWorked < 4.5) return "half-day";
+    // if (hoursWorked > 9) return "over-time";'
+    if (inTime.isBefore(officialCheckIn)) {
+        if (hoursWorked > 9){
+            return "over-time";
+        } else if(hoursWorked < 9 &&hoursWorked > 4.5){
+            // return "late";
+            return "on-time"
+        }
+        // return "late";
+    }
     return "on-time";
 }
 

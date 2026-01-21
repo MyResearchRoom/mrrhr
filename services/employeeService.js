@@ -15,6 +15,12 @@ const {
 } = require("../models");
 const bcrypt = require("bcrypt");
 
+const {
+  decryptSensitiveData,
+  getDecryptedDocumentAsBase64,
+  decryptFileBuffer,
+} = require("../utils/cryptography");
+
 exports.hrManagerRegistration = async ({
   name,
   officialEmail,
@@ -47,6 +53,39 @@ exports.hrManagerRegistration = async ({
   }
 };
 
+exports.employeeCredentialRegistration = async ({
+  name,
+  officialEmail,
+  mobileNumber,
+  password,
+  profilePicture,
+  role,
+}) => {
+  try {
+    const existingUser = await User.findOne({
+      where: {
+        officialEmail,
+      },
+    });
+    if (existingUser) {
+      throw new Error("Email already exists");
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({
+      name,
+      officialEmail,
+      mobileNumber,
+      password: hashedPassword,
+      role: role,
+      profilePicture,
+    });
+    await user.save(); 
+    return user;
+  } catch (error) {
+    throw error;
+  }
+};
+
 exports.employeeRegistration = async (data) => {
   const transaction = await sequelize.transaction();
   try {
@@ -66,6 +105,7 @@ exports.employeeRegistration = async (data) => {
       ...rest
     } = data;
 
+    //no need to check
     const existingUser = await User.findOne(
       {
         where: {
@@ -96,6 +136,8 @@ exports.employeeRegistration = async (data) => {
       }
     );
 
+
+    //emp
     const employee = await Employee.create(
       {
         ...rest,
@@ -107,6 +149,7 @@ exports.employeeRegistration = async (data) => {
       }
     );
 
+    //admin
     await EmployeeSalaryStructure.create(
       {
         employeeId: employee.id,
@@ -120,6 +163,8 @@ exports.employeeRegistration = async (data) => {
       }
     );
 
+
+    //emp
     const educationData = education.map((item, index) => {
       const doc = educationDoc[index];
       return {
@@ -306,6 +351,136 @@ exports.updateEmployee = async (data) => {
   }
 };
 
+// exports.getEmployee = async ({ employeeId }) => {
+//   try {
+//     // 🔹 Helper: Normalize ANY document field
+//     const formatDocument = (doc) => {
+//       if (!doc) return null;
+
+//       // Already proper data URL
+//       if (
+//         typeof doc === "string" &&
+//         doc.startsWith("data:")
+//       ) {
+//         return doc;
+//       }
+
+//       // Buffer (BLOB from DB)
+//       if (Buffer.isBuffer(doc)) {
+//         return `data:application/pdf;base64,${doc.toString("base64")}`;
+//       }
+
+//       // Plain base64 string (without prefix)
+//       return `data:application/pdf;base64,${doc}`;
+//     };
+
+//     // 🔹 Fetch Employee
+//     const employee = await Employee.findOne({
+//       where: { userId: employeeId },
+//       include: [
+//         {
+//           model: User,
+//           as: "user",
+//           attributes: [
+//             "id",
+//             "name",
+//             "officialEmail",
+//             "mobileNumber",
+//             "profilePicture",
+//           ],
+//           where: {
+//             role: {
+//               [Op.in]: ["EMPLOYEE", "HR_EMPLOYEE"],
+//             },
+//           },
+//           required: true,
+//         },
+//         {
+//           model: Education,
+//           as: "education",
+//         },
+//         {
+//           model: Experience,
+//           as: "experience",
+//         },
+//         {
+//           model: Department,
+//           as: "department",
+//         },
+//         {
+//           model: Designation,
+//           as: "designation_",
+//         },
+//         {
+//           model: WorkLocation,
+//           as: "workLocation_",
+//         },
+//         {
+//           model: Role,
+//           as: "role",
+//         },
+//         {
+//           model: Level,
+//           as: "level",
+//         },
+//         {
+//           model: SalarySlab,
+//           as: "salarySlab",
+//         },
+//       ],
+//     });
+
+//     if (!employee) {
+//       throw new Error("Employee not found");
+//     }
+
+//     // 🔹 Latest Salary Structure
+//     const salaryStructure = await EmployeeSalaryStructure.findOne({
+//       where: { employeeId: employee.id },
+//       order: [["createdAt", "DESC"]],
+//     });
+
+//     const data = employee.toJSON();
+
+//     // 🔹 Normalize Education Docs
+//     const education = (data.education || []).map((edu) => ({
+//       ...edu,
+//       doc: formatDocument(edu.doc),
+//     }));
+
+//     // 🔹 Normalize Experience Docs
+//     const experience = (data.experience || []).map((exp) => ({
+//       ...exp,
+//       experienceLetter: formatDocument(exp.experienceLetter),
+//     }));
+
+//     // 🔹 FINAL RESPONSE
+//     return {
+//       ...data,
+//       ...data.user,
+//       id: data.id,
+
+//       // 🔹 Employee Documents
+//       aadharDoc: formatDocument(data.aadharDoc),
+//       panDoc: formatDocument(data.panDoc),
+//       passbookDoc: formatDocument(data.passbookDoc),
+//       relivingLetter: formatDocument(data.relivingLetter),
+
+//       // 🔹 Education & Experience
+//       education,
+//       experience,
+
+//       // 🔹 Salary Structure
+//       structure: {
+//         earning: salaryStructure?.earnings || [],
+//         deduction: salaryStructure?.deductions || [],
+//       },
+//     };
+//   } catch (error) {
+//     throw error;
+//   }
+// };
+
 exports.getEmployee = async ({ employeeId }) => {
   try {
     const employee = await Employee.findOne({
@@ -322,6 +497,7 @@ exports.getEmployee = async ({ employeeId }) => {
             "officialEmail",
             "mobileNumber",
             "profilePicture",
+            "role",
           ],
           where: {
             role: {
@@ -391,20 +567,36 @@ exports.getEmployee = async ({ employeeId }) => {
       where: {
         employeeId: employee.id,
       },
-      order: [["createdAt", "DESC"]],
+      order: [
+        ["effectiveFrom", "DESC"], 
+        ["createdAt", "DESC"],
+      ],
     });
 
+//     const latestStructure = await EmployeeSalaryStructure.findOne({
+//   where: { employeeId },
+//   order: [["effectiveFrom", "DESC"]],
+// });
+
+
     const data = employee.toJSON();
+    // const data = employee.toJSON();
 
     return {
       ...data,
       ...data.user.toJSON(),
-      id: data.userId,
+      id: data.id,
       structure: {
-        earning: salaryStructure?.earnings,
-        deduction: salaryStructure?.deductions,
+        earning: salaryStructure?.earnings || [],
+        deduction: salaryStructure?.deductions || [],
       },
-      relivingLetter: data.relivingLetter.toString("utf8"),
+      relivingLetter: data.relivingLetter,
+      aadharDoc: data.aadharDoc,
+      panDoc: data.panDoc,
+      passbookDoc: data.passbookDoc,
+      role:data.user?.role ? data.user.role : "",
+      // profilePicture:data.p.toString("utf8")
+
     };
   } catch (error) {
     throw error;
@@ -437,6 +629,7 @@ exports.getHre = async () => {
   });
 };
 
+//updated by Jb on 05-01-2026
 exports.getEmployees = async ({
   departmentId,
   status,
@@ -491,17 +684,21 @@ exports.getEmployees = async ({
 
   return employees.map((employee) => ({
     id: employee.userId,
+    empid:employee.id,
     name: employee.user.name,
     role: employee.user.role,
-    status: employee.status,
-    profilePicture: employee.user.profilePicture.toString("utf8"),
-    designation: employee.designation_.designation,
-    department: employee.department.name,
-    salary: employee.ctc,
-    joiningDate: new Date(employee.joiningDate),
+    status: employee.status || "inactive",
+    profilePicture: employee.user.profilePicture
+      ? employee.user.profilePicture.toString("utf8")
+      : null,
+    designation: employee.designation_?.designation || null,
+    department: employee.department?.name || null,
+    salary: employee.ctc || null,
+    joiningDate: employee.joiningDate ? new Date(employee.joiningDate) : null,
     mobileNumber: employee.user.mobileNumber,
     officialEmail: employee.user.officialEmail,
   }));
+
 };
 
 exports.verifyEmployee = async ({ employeeId, status }) => {
@@ -555,7 +752,7 @@ exports.getUserInfo = async (req, res) => {
 
     const user = await User.findOne({
       where: { id: userId },
-      attributes: ["officialEmail", "mobileNumber", "name", "profilePicture"],
+      attributes: ["officialEmail", "mobileNumber", "name", "profilePicture","role","id"],
     });
 
     if (!user) {
@@ -567,6 +764,7 @@ exports.getUserInfo = async (req, res) => {
 
     let department = null;
     let designation = null;
+    let employeeId = null;
 
     if (role === "EMPLOYEE") {
       const employee = await Employee.findOne({
@@ -586,6 +784,7 @@ exports.getUserInfo = async (req, res) => {
       });
 
       if (employee) {
+        employeeId=employee?.id || null;
         department = employee.department?.name || null;
         designation = employee.designation_?.designation || null;
       }
@@ -595,12 +794,15 @@ exports.getUserInfo = async (req, res) => {
       success: true,
       message: "User info retrieved successfully.",
       data: {
+        id:user.id,
         name: user.name,
         officialEmail: user.officialEmail,
         mobileNumber: user.mobileNumber,
+        role: user.role,
         profilePicture: user.profilePicture.toString("utf8"),
         department,
         designation,
+        employeeId,
       },
     });
   } catch (error) {
@@ -611,3 +813,83 @@ exports.getUserInfo = async (req, res) => {
     });
   }
 };
+
+// exports.updateEmpByHR = async (req, res) => {
+//   const transaction = await sequelize.transaction();
+//   try {
+//     const { userId } = req.query;
+
+//     const {
+//       joiningDate,
+//       departmentId,
+//       designationId,
+//       workLocationId,
+//       employeeType,
+//       assignSalaryStructure,
+//       payrollEligibility,
+//       roleId,
+//       levelId,
+//       salarySlabId,
+//       ctc,
+//       paymentMethod,
+//       structure,
+//     } = req.body;
+
+//     if (!userId) {
+//       throw new Error("userId is required");
+//     }
+
+//     const employee = await Employee.findOne({
+//       where: { userId },
+//       transaction,
+//     });
+
+//     if (!employee) {
+//       throw new Error("Employee not found");
+//     }
+
+//     // ✅ Update employee table
+//     await employee.update(
+//       {
+//         joiningDate,
+//         departmentId,
+//         designationId,
+//         workLocationId,
+//         employeeType,
+//         payrollEligibility,
+//         ctc,
+//         paymentMethod,
+//       },
+//       { transaction }
+//     );
+
+//     // ✅ Salary structure (only if provided)
+//     if (structure?.earning || structure?.deduction) {
+//       await EmployeeSalaryStructure.create(
+//         {
+//           employeeId: employee.id,
+//           earnings: structure?.earning || [],
+//           deductions: structure?.deduction || [],
+//           ctc,
+//           effectiveFrom: new Date(),
+//         },
+//         { transaction }
+//       );
+//     }
+
+//     await transaction.commit();
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Employee updated successfully",
+//     });
+//   } catch (error) {
+//     await transaction.rollback();
+//     console.error(error);
+//     res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+

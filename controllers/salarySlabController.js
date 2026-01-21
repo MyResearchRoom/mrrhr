@@ -12,13 +12,13 @@ exports.addSalarySlab = async (req, res) => {
       });
     }
 
-    const isValidStructure = structureValidator(structure, 100, true);
-    if (!isValidStructure) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid structure",
-      });
-    }
+    // const isValidStructure = structureValidator(structure, 100, true);
+    // if (!isValidStructure) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Invalid structure",
+    //   });
+    // }
 
     if (!structure.earnings || !structure.deductions) {
       return res.status(400).json({
